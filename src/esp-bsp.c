@@ -8,7 +8,7 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_vendor.h"
 #include "esp_lcd_touch_gt911.h"
-#include "esp_bsp.h"
+#include "bsp/esp-bsp.h"
 
 static const char *TAG = "BSP";
 static i2c_master_bus_handle_t i2c_bus_handle = NULL;
