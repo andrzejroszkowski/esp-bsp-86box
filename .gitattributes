@@ -1,0 +1,23 @@
+# Set the default behavior to have EOLs as LF regardless of platform
+* text eol=lf
+
+# Declare files that will always have CRLF line endings on checkout.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Denote all files that are truly binary and should not be modified.
+*.doc binary
+*.docx binary
+*.exe binary
+*.gif binary
+*.gz binary
+*.gzip binary
+*.jar binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.swf binary
+*.tar binary
+*.war binary
+*.wav binary
+*.zip binary
