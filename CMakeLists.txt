@@ -6,6 +6,6 @@ idf_component_register(
         "src/bsp_storage.c"
         "src/bsp_audio.c"
     INCLUDE_DIRS "include"
-    REQUIRES driver esp_lcd lvgl__lvgl spiffs
-    PRIV_REQUIRES esp_lcd_touch_gt911
+    REQUIRES driver esp_lcd fatfs lvgl__lvgl sdmmc spiffs
+    PRIV_REQUIRES esp_lcd_touch_gt911 espressif__esp_lvgl_port
 )

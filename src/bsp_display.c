@@ -4,11 +4,17 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_rgb.h"
 #include "esp_lcd_panel_vendor.h"
+#include "esp_lvgl_port.h"
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+static const char *TAG = "bsp_display";
 static bool s_backlight_initialized;
 static int s_backlight_percent = 70;
+static bool s_lvgl_initialized;
+static lv_display_t *s_display_handle;
+static lv_indev_t *s_touch_input_handle;
 
 #define BACKLIGHT_LEDC_MODE           LEDC_LOW_SPEED_MODE
 #define BACKLIGHT_LEDC_CHANNEL        LEDC_CHANNEL_0
@@ -19,6 +25,62 @@ static int s_backlight_percent = 70;
 static void bsp_lcd_init_registers(void)
 {
     vTaskDelay(pdMS_TO_TICKS(120));
+}
+
+static lv_display_t *bsp_display_lcd_init(void)
+{
+    esp_lcd_panel_io_handle_t io_handle = NULL;
+    esp_lcd_panel_handle_t panel_handle = NULL;
+    const bsp_display_config_t display_cfg = {
+        .max_transfer_sz = (BSP_LCD_H_RES * 100) * (int) sizeof(uint16_t),
+    };
+
+    esp_err_t ret = bsp_display_new(&display_cfg, &panel_handle, &io_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize LCD panel: %s", esp_err_to_name(ret));
+        return NULL;
+    }
+
+    ret = esp_lcd_panel_disp_on_off(panel_handle, true);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to enable LCD output: %s", esp_err_to_name(ret));
+        return NULL;
+    }
+
+    const lvgl_port_display_cfg_t disp_cfg = {
+        .io_handle = io_handle,
+        .panel_handle = panel_handle,
+        .buffer_size = BSP_LCD_H_RES * 100,
+        .double_buffer = 0,
+        .hres = BSP_LCD_H_RES,
+        .vres = BSP_LCD_V_RES,
+        .monochrome = false,
+        .flags = {
+            .buff_dma = true,
+#if LVGL_VERSION_MAJOR >= 9
+            .swap_bytes = (BSP_LCD_BIG_ENDIAN ? true : false),
+#endif
+        },
+    };
+
+    return lvgl_port_add_disp(&disp_cfg);
+}
+
+static lv_indev_t *bsp_display_indev_init(lv_display_t *disp)
+{
+    esp_lcd_touch_handle_t touch_handle = NULL;
+    esp_err_t ret = bsp_touch_new(NULL, &touch_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize touch controller: %s", esp_err_to_name(ret));
+        return NULL;
+    }
+
+    const lvgl_port_touch_cfg_t touch_cfg = {
+        .disp = disp,
+        .handle = touch_handle,
+    };
+
+    return lvgl_port_add_touch(&touch_cfg);
 }
 
 esp_err_t bsp_display_brightness_init(void)
@@ -119,7 +181,6 @@ esp_err_t bsp_display_new(const bsp_display_config_t *config,
         .vsync_gpio_num = BSP_LCD_VSYNC_GPIO,
         .hsync_gpio_num = BSP_LCD_HSYNC_GPIO,
         .de_gpio_num = BSP_LCD_DE_GPIO,
-        .disp_gpio_num = BSP_LCD_CS_GPIO,
         .data_gpio_nums = {
             BSP_LCD_DATA0_GPIO,  BSP_LCD_DATA1_GPIO,  BSP_LCD_DATA2_GPIO,  BSP_LCD_DATA3_GPIO,
             BSP_LCD_DATA4_GPIO,  BSP_LCD_DATA5_GPIO,  BSP_LCD_DATA6_GPIO,  BSP_LCD_DATA7_GPIO,
@@ -130,13 +191,13 @@ esp_err_t bsp_display_new(const bsp_display_config_t *config,
             .pclk_hz = BSP_LCD_PIXEL_CLOCK_HZ,
             .h_res = BSP_LCD_H_RES,
             .v_res = BSP_LCD_V_RES,
-            .hsync_back_porch = 20,
+            .hsync_back_porch = 50,
             .hsync_front_porch = 10,
             .hsync_pulse_width = 8,
-            .vsync_back_porch = 10,
+            .vsync_back_porch = 20,
             .vsync_front_porch = 10,
             .vsync_pulse_width = 8,
-            .flags.pclk_active_neg = false,
+            .flags.pclk_active_neg = true,
         },
         .flags.fb_in_psram = true,
     };
@@ -175,28 +236,59 @@ esp_err_t bsp_display_backlight_set(uint8_t brightness_percent)
 
 lv_display_t *bsp_display_start(void)
 {
-    return NULL;
+    if (s_display_handle != NULL) {
+        return s_display_handle;
+    }
+
+    const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
+    if (!s_lvgl_initialized) {
+        esp_err_t ret = lvgl_port_init(&lvgl_cfg);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize LVGL port: %s", esp_err_to_name(ret));
+            return NULL;
+        }
+        s_lvgl_initialized = true;
+    }
+
+    s_display_handle = bsp_display_lcd_init();
+    if (s_display_handle == NULL) {
+        return NULL;
+    }
+
+    s_touch_input_handle = bsp_display_indev_init(s_display_handle);
+    if (s_touch_input_handle == NULL) {
+        return NULL;
+    }
+
+    return s_display_handle;
 }
 
 lv_indev_t *bsp_display_get_input_dev(void)
 {
-    return NULL;
+    return s_touch_input_handle;
 }
 
 bool bsp_display_lock(uint32_t timeout_ms)
 {
-    (void) timeout_ms;
-    return true;
+    if (!s_lvgl_initialized) {
+        return true;
+    }
+
+    return lvgl_port_lock(timeout_ms);
 }
 
 void bsp_display_unlock(void)
 {
+    if (s_lvgl_initialized) {
+        lvgl_port_unlock();
+    }
 }
 
 void bsp_display_rotate(lv_display_t *disp, lv_display_rotation_t rotation)
 {
-    (void) disp;
-    (void) rotation;
+    if (disp != NULL) {
+        lv_display_set_rotation(disp, rotation);
+    }
 }
 
 esp_err_t bsp_display_enter_sleep(void)

@@ -16,13 +16,11 @@
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "driver/i2s_std.h"
-#include "driver/sdspi_host.h"
 #include "esp_err.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_touch.h"
 #include "esp_lcd_types.h"
 #include "lvgl.h"
-#include "sdmmc_cmd.h"
 
 /**************************************************************************************************
  * BSP Board Name
@@ -40,7 +38,7 @@
 #define BSP_CAPS_AUDIO          0
 #define BSP_CAPS_AUDIO_SPEAKER  0
 #define BSP_CAPS_AUDIO_MIC      0
-#define BSP_CAPS_SDCARD         1
+#define BSP_CAPS_SDCARD         0
 #define BSP_CAPS_IMU            0
 
 /**************************************************************************************************
@@ -59,15 +57,8 @@
 #define BSP_LCD_HSYNC_GPIO      (16)
 #define BSP_LCD_VSYNC_GPIO      (17)
 #define BSP_LCD_DE_GPIO         (18)
-#define BSP_LCD_BL_GPIO         (38)
-
 #define BSP_LCD_CS_GPIO         (39)
-#define BSP_LCD_SCLK_GPIO       (48)
-#define BSP_LCD_MOSI_GPIO       (47)
-#define BSP_LCD_DC_GPIO         (GPIO_NUM_NC)
-#define BSP_LCD_MISO_GPIO       (GPIO_NUM_NC)
-#define BSP_LCD_RST_GPIO        (GPIO_NUM_NC)
-#define BSP_LCD_BUSY_GPIO       (GPIO_NUM_NC)
+#define BSP_LCD_BL_GPIO         (38)
 
 #define BSP_LCD_DATA0_GPIO      (11)
 #define BSP_LCD_DATA1_GPIO      (12)
@@ -88,18 +79,14 @@
 
 #define BSP_I2C_SDA_GPIO        (19)
 #define BSP_I2C_SCL_GPIO        (45)
-#define BSP_TOUCH_INT_GPIO      (GPIO_NUM_NC)
-#define BSP_TOUCH_RST_GPIO      (GPIO_NUM_NC)
-#define BSP_TOUCH_I2C_ADDR      (0x5D)
-
-#define BSP_USB_TXD_GPIO        (43)
-#define BSP_USB_RXD_GPIO        (44)
+#define BSP_TOUCH_INT_GPIO      (-1)
+#define BSP_TOUCH_RST_GPIO      (-1)
+#define BSP_TOUCH_I2C_ADDR      (0x14)
 
 #define BSP_SD_CS_GPIO          (42)
 #define BSP_SD_MOSI_GPIO        (47)
 #define BSP_SD_CLK_GPIO         (48)
 #define BSP_SD_MISO_GPIO        (41)
-#define BSP_SDSPI_HOST          (SPI2_HOST)
 
 #define BSP_RELAY_1_GPIO        (40)
 #define BSP_RELAY_2_GPIO        (2)
@@ -137,16 +124,6 @@
 #define BSP_SPIFFS_MAX_FILES        CONFIG_BSP_SPIFFS_MAX_FILES
 #else
 #define BSP_SPIFFS_MAX_FILES        (5)
-#endif
-
-/**************************************************************************************************
- * SD card
- **************************************************************************************************/
-
-#ifdef CONFIG_BSP_SD_MOUNT_POINT
-#define BSP_SD_MOUNT_POINT          CONFIG_BSP_SD_MOUNT_POINT
-#else
-#define BSP_SD_MOUNT_POINT          "/sdcard"
 #endif
 
 #ifdef __cplusplus
@@ -203,10 +180,6 @@ esp_err_t bsp_touch_new(const bsp_touch_config_t *config, esp_lcd_touch_handle_t
 
 esp_err_t bsp_spiffs_mount(void);
 esp_err_t bsp_spiffs_unmount(void);
-
-esp_err_t bsp_sdcard_mount(void);
-esp_err_t bsp_sdcard_unmount(void);
-sdmmc_card_t *bsp_sdcard_get_handle(void);
 
 esp_codec_dev_handle_t bsp_audio_codec_speaker_init(void);
 esp_codec_dev_handle_t bsp_audio_codec_microphone_init(void);
